@@ -4,13 +4,13 @@ import json
 import webbrowser
 from ctypes import windll, Structure, c_ulong, sizeof, byref, c_void_p
 
-from PyQt6.QtCore import Qt, QTimer, QSize, QUrl, QFileSystemWatcher, QPointF
+from PyQt6.QtCore import Qt, QTimer, QSize, QUrl, QFileSystemWatcher, QPointF, QFileInfo
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QFileDialog, QDialog, QGridLayout, QLabel, QScrollArea, QFrame,
     QColorDialog, QCheckBox, QFileIconProvider, QToolTip
 )
-from PyQt6.QtGui import QIcon, QColor, QPixmap, QPainter, QPainterPath, QFont, QDesktopServices, QFileInfo
+from PyQt6.QtGui import QIcon, QColor, QPixmap, QPainter, QPainterPath, QFont, QDesktopServices
 
 # --- COSTANTI & STRUTTURE WINDOWS APPBAR ---
 ABM_NEW = 0x00000000
@@ -34,21 +34,20 @@ class APPBARDATA(Structure):
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "dock_config.json")
 
-# --- GENERATORE DI 48 ICONE MATERIAL VECTORIALI (SVG/PAINTER) ---
+# --- GENERATORE DI 48 ICONE MATERIAL VETTORIALI ---
 def draw_material_icon(index, size=32):
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     
-    # Palette e disegno icone stile Material
+    # Palette colori e forme stile Material
     colors = ["#2196F3", "#4CAF50", "#FF9800", "#E91E63", "#9C27B0", "#00BCD4", "#FF5722", "#607D8B"]
     color = QColor(colors[index % len(colors)])
     painter.setBrush(color)
     painter.setPen(Qt.PenStyle.NoPen)
     
     path = QPainterPath()
-    # Esempi di forme geometriche/simboli stile Material
     mode = index % 6
     if mode == 0:  # Cartella / Blocco
         path.addRoundedRect(4, 8, 24, 18, 3, 3)
@@ -63,7 +62,7 @@ def draw_material_icon(index, size=32):
         path.addRoundedRect(6, 6, 20, 20, 4, 4)
     elif mode == 4:  # Documento
         path.addRoundedRect(6, 4, 20, 24, 2, 2)
-    elif mode == 5:  # Simbolo Play/Azione
+    elif mode == 5:  # Simbolo Play / Azione
         path.moveTo(8, 6)
         path.lineTo(26, 16)
         path.lineTo(8, 26)
@@ -84,7 +83,7 @@ class IconPickerDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # Checkbox per nascondere
+        # Checkbox per nascondere l'elemento
         self.chk_hide = QCheckBox("Nascondi questa icona dalla barra")
         self.chk_hide.setChecked(current_hidden)
         layout.addWidget(self.chk_hide)
@@ -128,14 +127,14 @@ class DockWindow(QWidget):
         self.config = self.load_config()
         self.dock_side = self.config.get("side", ABE_RIGHT)
         self.folder_path = self.config.get("path", "")
-        self.custom_icons = self.config.get("custom_icons", {})  # {path: icon_index}
+        self.custom_icons = self.config.get("custom_icons", {})
         self.hidden_items = set(self.config.get("hidden_items", []))
         self.bg_color = self.config.get("bg_color", None)
 
         self.is_dragging = False
         self.drag_start_x = 0
 
-        # Monitoring cartella
+        # Controllo modifiche in tempo reale alla cartella
         self.watcher = QFileSystemWatcher(self)
         self.watcher.directoryChanged.connect(self.load_items)
 
@@ -218,7 +217,7 @@ class DockWindow(QWidget):
         self.btn_down.setStyleSheet("color: #AAA; background: rgba(255,255,255,0.05); border: none; font-size: 8px;")
         self.main_layout.addWidget(self.btn_down)
 
-        # Timer Scorrimento al passaggio del mouse (Senza click)
+        # Timer Scorrimento al passaggio del mouse senza click
         self.scroll_timer = QTimer()
         self.scroll_timer.timeout.connect(self.handle_scroll)
         self.scroll_direction = 0
@@ -239,7 +238,7 @@ class DockWindow(QWidget):
         bottom_layout.addWidget(self.btn_switch)
         self.main_layout.addWidget(self.bottom_bar)
 
-        # Lampeggio
+        # Timer Lampeggio
         self.blink_timer = QTimer()
         self.blink_state = False
         self.blink_timer.timeout.connect(self.toggle_blink)
@@ -340,7 +339,6 @@ class DockWindow(QWidget):
                 self.setup_system_bar()
 
     def contextMenuEvent(self, event):
-        # Selezione colore di sfondo al clic destro sullo sfondo
         color = QColorDialog.getColor()
         if color.isValid():
             self.bg_color = color.name()
@@ -368,7 +366,6 @@ class DockWindow(QWidget):
                     self.load_items()
                     break
             else:
-                # Rimane aperto finché non viene fornito un pathname valido se manca
                 if not self.folder_path or not os.path.exists(self.folder_path):
                     continue
                 else:
@@ -376,7 +373,6 @@ class DockWindow(QWidget):
 
     # --- CARICAMENTO ITEM & TOOLTIP ARIAL 14 ---
     def load_items(self):
-        # Svuota container
         for i in reversed(range(self.container_layout.count())):
             widget = self.container_layout.itemAt(i).widget()
             if widget:
@@ -396,11 +392,9 @@ class DockWindow(QWidget):
             btn = QPushButton()
             btn.setFixedSize(36, 36)
 
-            # Tooltip Arial 14
             QToolTip.setFont(QFont("Arial", 14))
             btn.setToolTip(entry)
 
-            # Gestione Icona (Custom o Sistema Originario)
             if full_path in self.custom_icons:
                 idx = self.custom_icons[full_path]
                 btn.setIcon(draw_material_icon(idx))
@@ -429,13 +423,11 @@ class DockWindow(QWidget):
         is_hidden = path in self.hidden_items
         dialog = IconPickerDialog(current_hidden=is_hidden, parent=self)
         if dialog.exec():
-            # Gestione Nascondi
             if dialog.is_hidden():
                 self.hidden_items.add(path)
             else:
                 self.hidden_items.discard(path)
 
-            # Gestione Icona
             if dialog.selected_icon_index is not None:
                 self.custom_icons[path] = dialog.selected_icon_index
 
@@ -446,7 +438,6 @@ class DockWindow(QWidget):
     def switch_desktop(self):
         import win32api
         import win32con
-        # Invia la combinazione Win + Ctrl + Freccia Destra per scorrere al desktop successivo
         win32api.keybd_event(win32con.VK_LWIN, 0, 0, 0)
         win32api.keybd_event(win32con.VK_CONTROL, 0, 0, 0)
         win32api.keybd_event(win32con.VK_RIGHT, 0, 0, 0)
